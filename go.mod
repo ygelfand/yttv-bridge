@@ -7,7 +7,7 @@ require (
 	github.com/samber/slog-gin v1.14.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
-	github.com/ygelfand/lib-yttv v0.0.0
+	github.com/ygelfand/lib-yttv v0.0.0-20260615201750-c7b41e31bb7f
 )
 
 require (
@@ -57,5 +57,3 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/ygelfand/lib-yttv => ../lib-yttv
