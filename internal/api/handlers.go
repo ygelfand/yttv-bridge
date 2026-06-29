@@ -29,10 +29,11 @@ type airingJSON struct {
 }
 
 type channelJSON struct {
-	Name          string       `json:"name"`
-	IconURL       string       `json:"icon_url"`
-	CurrentAiring *airingJSON  `json:"current_airing,omitempty"`
-	NextAirings   []airingJSON `json:"next_airings"`
+	Name             string       `json:"name"`
+	IconURL          string       `json:"icon_url"`
+	LiveThumbnailURL string       `json:"live_thumbnail_url,omitempty"`
+	CurrentAiring    *airingJSON  `json:"current_airing,omitempty"`
+	NextAirings      []airingJSON `json:"next_airings"`
 }
 
 type deviceJSON struct {
@@ -142,9 +143,10 @@ func mapChannels(in []epg.Channel) []channelJSON {
 	horizon := now + (2 * time.Hour).Milliseconds()
 	for _, ch := range in {
 		row := channelJSON{
-			Name:        ch.Name,
-			IconURL:     normalizeURL(ch.StationIconURL),
-			NextAirings: []airingJSON{},
+			Name:             ch.Name,
+			IconURL:          normalizeURL(ch.StationIconURL),
+			LiveThumbnailURL: ch.LiveThumbnailURL(),
+			NextAirings:      []airingJSON{},
 		}
 		for _, a := range ch.Airings {
 			if a.EndTimeMs <= now {

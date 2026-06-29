@@ -7,7 +7,7 @@ require (
 	github.com/samber/slog-gin v1.14.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
-	github.com/ygelfand/lib-yttv v0.0.0-20260615201750-c7b41e31bb7f
+	github.com/ygelfand/lib-yttv v0.0.0-20260629031340-97b618abe590
 )
 
 require (
