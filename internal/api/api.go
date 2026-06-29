@@ -20,5 +20,8 @@ func Router(store *state.Store) *gin.Engine {
 	r.GET("/snapshot", h.snapshot)
 	r.POST("/cast", h.cast)
 	r.POST("/stop", h.stop)
+	r.POST("/volume", h.volume)
+	r.POST("/mute", h.mute)
+	r.POST("/playpause", h.playPause)
 	return r
 }

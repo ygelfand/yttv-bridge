@@ -114,6 +114,8 @@ github.com/ugorji/go/codec v1.2.12 h1:9LC83zGrHhuUA9l16C9AHXAqEV/2wBQ4nkvumAE65E
 github.com/ugorji/go/codec v1.2.12/go.mod h1:UNopzCgEMSXjBc6AOMqYvWC1ktqTAfzJZUZgYf6w6lg=
 github.com/ygelfand/lib-yttv v0.0.0-20260629031340-97b618abe590 h1:FxaeUZzlb3VcXSHm+sExBiaJqtiEseHzPSBHG17ChRU=
 github.com/ygelfand/lib-yttv v0.0.0-20260629031340-97b618abe590/go.mod h1:0u/frEO1fLnSMe9jhoee8fX+Ti4YjJrEwDlUgpxutvs=
+github.com/ygelfand/lib-yttv v0.0.0-20260629225448-9cde4780b036 h1:v8Fadlt9gs21SPkYEjXf0v5e5mT1BMGVxXdyo6KAkcI=
+github.com/ygelfand/lib-yttv v0.0.0-20260629225448-9cde4780b036/go.mod h1:0u/frEO1fLnSMe9jhoee8fX+Ti4YjJrEwDlUgpxutvs=
 go.opentelemetry.io/otel v1.29.0 h1:PdomN/Al4q/lN6iBJEN3AwPvUiHPMlt93c8bqTG5Llw=
 go.opentelemetry.io/otel v1.29.0/go.mod h1:N/WtXPs1CNCUEx+Agz5uouwCba+i+bJGFicT8SR4NP8=
 go.opentelemetry.io/otel/trace v1.29.0 h1:J/8ZNK4XgR7a21DZUAsbF8pZ5Jcw1VhACmnYt39JTi4=

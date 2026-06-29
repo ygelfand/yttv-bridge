@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -18,11 +19,25 @@ type Store struct {
 
 	mu       sync.RWMutex
 	channels []epg.Channel
-	devices  []cast.Device
+	devices  map[string]*deviceEntry // keyed by cast.Device.ID()
+}
+
+// deviceEntry is a discovered device plus, for video devices, its live status
+// (pushed by a persistent cast listener) and the cancel for that listener.
+type deviceEntry struct {
+	dev    cast.Device
+	status *cast.Status
+	cancel context.CancelFunc
+}
+
+// DeviceStatus pairs a device with its latest status (nil when unknown/idle).
+type DeviceStatus struct {
+	Device cast.Device
+	Status *cast.Status
 }
 
 func New(session *yttv.Session) *Store {
-	return &Store{Session: session}
+	return &Store{Session: session, devices: map[string]*deviceEntry{}}
 }
 
 func (s *Store) Channels() []epg.Channel {
@@ -36,8 +51,23 @@ func (s *Store) Channels() []epg.Channel {
 func (s *Store) Devices() []cast.Device {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	out := make([]cast.Device, len(s.devices))
-	copy(out, s.devices)
+	out := make([]cast.Device, 0, len(s.devices))
+	for _, e := range s.devices {
+		out = append(out, e.dev)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+// DeviceStatuses returns each device with its latest status, sorted by name.
+func (s *Store) DeviceStatuses() []DeviceStatus {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]DeviceStatus, 0, len(s.devices))
+	for _, e := range s.devices {
+		out = append(out, DeviceStatus{Device: e.dev, Status: e.status})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Device.Name < out[j].Device.Name })
 	return out
 }
 
@@ -45,9 +75,9 @@ func (s *Store) FindDevice(nameSubstr string) (cast.Device, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	want := strings.ToLower(nameSubstr)
-	for _, d := range s.devices {
-		if strings.Contains(strings.ToLower(d.Name), want) {
-			return d, true
+	for _, e := range s.devices {
+		if strings.Contains(strings.ToLower(e.dev.Name), want) {
+			return e.dev, true
 		}
 	}
 	return cast.Device{}, false
@@ -64,24 +94,65 @@ func (s *Store) refreshChannels(ctx context.Context) error {
 	return nil
 }
 
-func (s *Store) refreshDevices(ctx context.Context, timeout time.Duration) error {
-	devs, err := discover.Discover(ctx, timeout)
-	if err != nil {
-		return err
-	}
-	s.mu.Lock()
-	s.devices = devs
-	s.mu.Unlock()
-	return nil
-}
-
+// Run starts the EPG refresh loop and the continuous device monitor.
 func (s *Store) Run(ctx context.Context, epgEvery, discEvery, discTimeout time.Duration) {
 	go s.loop(ctx, "epg", epgEvery, func(c context.Context) error {
 		return s.refreshChannels(c)
 	})
-	go s.loop(ctx, "discover", discEvery, func(c context.Context) error {
-		return s.refreshDevices(c, discTimeout)
-	})
+	go s.monitorDevices(ctx, discEvery, discTimeout)
+}
+
+// monitorDevices consumes discovery events: it tracks the device list and, for
+// each video device, holds a persistent cast listener that pushes live status.
+func (s *Store) monitorDevices(ctx context.Context, interval, window time.Duration) {
+	for ev := range discover.Watch(ctx, interval, window) {
+		if ev.Up {
+			s.deviceUp(ctx, ev.Device)
+		} else {
+			s.deviceDown(ev.Device)
+		}
+	}
+}
+
+func (s *Store) deviceUp(ctx context.Context, d cast.Device) {
+	id := d.ID()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if e, ok := s.devices[id]; ok {
+		e.dev = d // refresh metadata (e.g. IP change)
+		return
+	}
+	e := &deviceEntry{dev: d}
+	s.devices[id] = e
+	if d.IsVideo() {
+		dctx, cancel := context.WithCancel(ctx)
+		e.cancel = cancel
+		go s.watchStatus(dctx, id, d)
+	}
+	slog.InfoContext(ctx, "device up", "name", d.Name, "video", d.IsVideo())
+}
+
+func (s *Store) deviceDown(d cast.Device) {
+	id := d.ID()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if e, ok := s.devices[id]; ok {
+		if e.cancel != nil {
+			e.cancel()
+		}
+		delete(s.devices, id)
+		slog.Info("device down", "name", d.Name)
+	}
+}
+
+func (s *Store) watchStatus(ctx context.Context, id string, d cast.Device) {
+	for st := range cast.WatchDevice(ctx, d) {
+		s.mu.Lock()
+		if e, ok := s.devices[id]; ok {
+			e.status = st
+		}
+		s.mu.Unlock()
+	}
 }
 
 func (s *Store) loop(ctx context.Context, name string, every time.Duration, fn func(context.Context) error) {
