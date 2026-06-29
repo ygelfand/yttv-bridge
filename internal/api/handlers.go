@@ -40,6 +40,7 @@ type deviceJSON struct {
 	Name   string            `json:"name"`
 	Host   string            `json:"host"`
 	Port   int               `json:"port"`
+	UUID   string            `json:"uuid,omitempty"`
 	Video  bool              `json:"video"`
 	Status *deviceStatusJSON `json:"status,omitempty"`
 }
@@ -282,7 +283,7 @@ func mapDevices(in []state.DeviceStatus, chByVID map[string]string) []deviceJSON
 	out := make([]deviceJSON, 0, len(in))
 	for _, ds := range in {
 		d := ds.Device
-		dj := deviceJSON{Name: d.Name, Host: d.Host, Port: d.Port, Video: d.IsVideo()}
+		dj := deviceJSON{Name: d.Name, Host: d.Host, Port: d.Port, UUID: d.UUID, Video: d.IsVideo()}
 		if st := ds.Status; st != nil {
 			sj := &deviceStatusJSON{
 				App:    st.AppName,
