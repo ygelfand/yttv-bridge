@@ -18,6 +18,7 @@ func Router(store *state.Store) *gin.Engine {
 	r.GET("/channels", h.channels)
 	r.GET("/devices", h.devices)
 	r.GET("/snapshot", h.snapshot)
+	r.GET("/events", h.events)
 	r.POST("/cast", h.cast)
 	r.POST("/stop", h.stop)
 	r.POST("/volume", h.volume)

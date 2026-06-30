@@ -20,6 +20,7 @@ type Store struct {
 	mu       sync.RWMutex
 	channels []epg.Channel
 	devices  map[string]*deviceEntry // keyed by cast.Device.ID()
+	changed  chan struct{}           // closed+replaced on any change; wakes /events
 }
 
 // deviceEntry is a discovered device plus, for video devices, its live status
@@ -37,7 +38,26 @@ type DeviceStatus struct {
 }
 
 func New(session *yttv.Session) *Store {
-	return &Store{Session: session, devices: map[string]*deviceEntry{}}
+	return &Store{
+		Session: session,
+		devices: map[string]*deviceEntry{},
+		changed: make(chan struct{}),
+	}
+}
+
+// Changed returns a channel that is closed on the next state change. Callers
+// re-fetch it after each wake. No registration/cleanup needed: a change closes
+// the current channel (waking everyone) and installs a fresh one.
+func (s *Store) Changed() <-chan struct{} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.changed
+}
+
+// broadcast wakes all Changed() waiters. Caller must hold s.mu for writing.
+func (s *Store) broadcast() {
+	close(s.changed)
+	s.changed = make(chan struct{})
 }
 
 func (s *Store) Channels() []epg.Channel {
@@ -118,6 +138,7 @@ func (s *Store) deviceUp(ctx context.Context, d cast.Device) {
 	id := d.ID()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	defer s.broadcast()
 	if e, ok := s.devices[id]; ok {
 		e.dev = d // refresh metadata (e.g. IP change)
 		return
@@ -136,6 +157,7 @@ func (s *Store) deviceDown(d cast.Device) {
 	id := d.ID()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	defer s.broadcast()
 	if e, ok := s.devices[id]; ok {
 		if e.cancel != nil {
 			e.cancel()
@@ -151,6 +173,7 @@ func (s *Store) watchStatus(ctx context.Context, id string, d cast.Device) {
 		if e, ok := s.devices[id]; ok {
 			e.status = st
 		}
+		s.broadcast()
 		s.mu.Unlock()
 	}
 }

@@ -2,7 +2,10 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -87,6 +90,54 @@ func (h *handlers) snapshot(c *gin.Context) {
 		"channels": mapChannels(h.store.Channels()),
 		"devices":  mapDevices(h.store.DeviceStatuses(), byVID),
 	})
+}
+
+// events streams device status as Server-Sent Events: an initial frame, then a
+// fresh frame whenever the store signals a change. Control stays on the POST
+// endpoints, so this is one-way (server → client).
+func (h *handlers) events(c *gin.Context) {
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("Connection", "keep-alive")
+	c.Writer.Header().Set("X-Accel-Buffering", "no") // don't let proxies buffer
+
+	write := func() bool {
+		data, err := json.Marshal(gin.H{
+			"devices": mapDevices(h.store.DeviceStatuses(), h.channelByVideoID()),
+		})
+		if err != nil {
+			return false
+		}
+		if _, err := fmt.Fprintf(c.Writer, "data: %s\n\n", data); err != nil {
+			return false
+		}
+		c.Writer.Flush()
+		return true
+	}
+
+	ctx := c.Request.Context()
+	ch := h.store.Changed() // grab before the first write so we can't miss a change
+	if !write() {
+		return
+	}
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ch:
+			ch = h.store.Changed()
+			if !write() {
+				return
+			}
+		case <-ticker.C:
+			if _, err := io.WriteString(c.Writer, ": ping\n\n"); err != nil {
+				return
+			}
+			c.Writer.Flush()
+		}
+	}
 }
 
 // channelByVideoID indexes channel names by their live videoId so a device's
